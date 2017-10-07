@@ -1,0 +1,39 @@
+/* Author: Sean Pesce */
+
+.main_window {
+	
+}
+
+.text_field {
+    -fx-text-fill: black;
+    -fx-prompt-text-fill: gray;
+    -fx-highlight-fill: dodgerblue;
+    -fx-highlight-text-fill: white;
+    -fx-display-caret: true;
+}
+
+.text_field:invalid_input {
+    -fx-text-box-border: #b30000;
+    -fx-focus-color: red;
+    -fx-text-fill: #b30000;
+}
+
+.timer {
+    -fx-font-size: 28px;
+    -fx-font-family: "Courier New";
+    -fx-font-weight: bold;
+    -fx-background-color: #e6e6e6;
+    -fx-border-radius: 5px 5px 5px 5px;
+    -fx-background-radius: 5px 5px 5px 5px;
+}
+
+.timer_tooltip {
+	-fx-font-size: 12px;
+    -fx-font-family: "Arial";
+    -fx-font-weight: normal;
+}
+
+.reminder_button {
+	-fx-translate-y: 20;
+}
+

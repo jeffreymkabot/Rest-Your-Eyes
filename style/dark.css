@@ -1,0 +1,20 @@
+/* Author: Sean Pesce */
+
+.root {
+    -fx-base: rgba(60, 63, 65, 255);
+    -fx-focus-color: olive;
+}
+
+.main_window {
+	-fx-background-color: rgb(89, 94, 98);
+}
+
+.text_field {
+	-fx-prompt-text-fill: rgb(89, 94, 98);
+}
+
+.timer {
+	-fx-background-color: rgb(56, 58, 60);
+    
+}
+
