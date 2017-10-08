@@ -55,3 +55,20 @@ local.properties
 ###################################
 
 
+
+
+##############################
+# NetBeans ignore entries
+##############################
+
+nbproject/private/
+build/
+nbbuild/
+dist/
+nbdist/
+.nb-gradle/
+
+###################################
+
+
+
