@@ -315,7 +315,11 @@ public class RestYourEyesUtil extends Application {
 		
 		stage.setScene(scene);
 		stage.setTitle(PROGRAM_TITLE);
-        stage.getIcons().add(new Image(RestYourEyesUtil.class.getResourceAsStream("../" + PROGRAM_ICON)));
+		try{
+			stage.getIcons().add(new Image(ClassLoader.getSystemResourceAsStream(PROGRAM_ICON)));
+		}catch(Exception ex){
+			System.out.println("ERROR: Unable to load window icon");
+		}
 		
 		primaryVBox.getStyleClass().add("main_window");
 		
@@ -345,7 +349,6 @@ public class RestYourEyesUtil extends Application {
 		                System.out.println("ERROR: No system tray support.");
 		                Platform.setImplicitExit(true);
 		                return;
-		                // @TODO: Handle this better?
 		            }
 		
 		            java.awt.SystemTray tray = java.awt.SystemTray.getSystemTray();
@@ -353,7 +356,10 @@ public class RestYourEyesUtil extends Application {
 		            // Set up system tray icon
 		            if(trayIcon != null)
 		            	java.awt.SystemTray.getSystemTray().remove(trayIcon);
-		            trayIcon = new java.awt.TrayIcon(toolkit.createImage("style/" + PROGRAM_ICON_WHITE));
+		            String iconRelPath = "style/" + PROGRAM_ICON_WHITE;
+		            if(!new File(iconRelPath).exists())
+		            	iconRelPath = PROGRAM_ICON_WHITE;
+		            trayIcon = new java.awt.TrayIcon(toolkit.createImage(iconRelPath));
 		            trayIcon.setImageAutoSize(true);
 		            
 		            // Show the main window on double-click
@@ -438,7 +444,11 @@ public class RestYourEyesUtil extends Application {
 		if(useDarkTheme)
 			remStage.getScene().getStylesheets().add(DARK_STYLE_SHEET);
         
-		remStage.getIcons().add(new Image(RestYourEyesUtil.class.getResourceAsStream("../" + PROGRAM_ICON)));
+		try{
+			remStage.getIcons().add(new Image(ClassLoader.getSystemResourceAsStream(PROGRAM_ICON)));
+		}catch(Exception ex){
+			System.out.println("ERROR: Unable to load reminder window icon");
+		}
 		remStage.setTitle("Rest your eyes!");
         DialogPane dPane = reminder.getDialogPane();
         dPane.setPrefWidth(350);
@@ -802,6 +812,11 @@ public class RestYourEyesUtil extends Application {
 		javafx.application.Platform.runLater(new Runnable() {
 			@Override
 			public void run() {
+				
+				if(reminderBtPane.getChildren().size() > 1)
+					reminderBtPane.getChildren().get(1).requestFocus();
+				else if(reminderBtPane.getChildren().size() > 0)
+					reminderBtPane.getChildren().get(0).requestFocus();
 				
 				if(trayIcon == null && fileMenu.getItems().contains(fileHide)){
 					fileMenu.getItems().remove(fileHide);
