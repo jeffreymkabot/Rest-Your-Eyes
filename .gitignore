@@ -1,3 +1,6 @@
+*.exe
+*.ini
+!Prefs.example.ini
 
 ##############################
 # Eclipse ignore entries
