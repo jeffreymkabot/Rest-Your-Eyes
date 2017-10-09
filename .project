@@ -14,4 +14,26 @@
 	<natures>
 		<nature>org.eclipse.jdt.core.javanature</nature>
 	</natures>
+	<linkedResources>
+		<link>
+			<name>dark.css</name>
+			<type>1</type>
+			<locationURI>PROJECT_LOC/style/dark.css</locationURI>
+		</link>
+		<link>
+			<name>icon.png</name>
+			<type>1</type>
+			<locationURI>PROJECT_LOC/style/icon.png</locationURI>
+		</link>
+		<link>
+			<name>icon_white.png</name>
+			<type>1</type>
+			<locationURI>PROJECT_LOC/style/icon_white.png</locationURI>
+		</link>
+		<link>
+			<name>style.css</name>
+			<type>1</type>
+			<locationURI>PROJECT_LOC/style/style.css</locationURI>
+		</link>
+	</linkedResources>
 </projectDescription>
