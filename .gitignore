@@ -1,6 +1,6 @@
 *.exe
 *.ini
-!Prefs.example.ini
+!**/Prefs.example.ini
 
 ##############################
 # Eclipse ignore entries
@@ -72,6 +72,8 @@ nbdist/
 .nb-gradle/
 
 ###################################
+
+Release/
 
 
 

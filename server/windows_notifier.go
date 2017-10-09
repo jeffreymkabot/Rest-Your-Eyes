@@ -15,7 +15,7 @@ func NewWindowsApp() (*windowsApp, error) {
 	}
 	app.main = main
 
-	icon, err := walk.NewIconFromFile("./style/RestYourEyes.ico")
+	icon, err := walk.NewIconFromFile("./rsrc/icons/package/windows/RestYourEyes.ico")
 	if err != nil {
 		return nil, err
 	}

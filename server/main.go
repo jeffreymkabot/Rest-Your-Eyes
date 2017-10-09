@@ -97,7 +97,7 @@ func cron(data *prefs, updates <-chan int64, queries chan<- time.Time, app app) 
 }
 
 func main() {
-	cfg := flag.String("f", "Prefs.ini", "config file")
+	cfg := flag.String("f", "rsrc/Prefs.ini", "config file")
 	flag.Parse()
 	log.Printf("prefs from file %v", *cfg)
 

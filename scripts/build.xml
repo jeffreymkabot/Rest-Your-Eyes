@@ -1,0 +1,184 @@
+<?xml version="1.0" encoding="UTF-8"?>
+	<project name="RestYourEyes" default="do-deploy" basedir="."  xmlns:fx="javafx:com.sun.javafx.tools.ant">
+	<target name="init-fx-tasks">
+		<path id="fxant">
+			<filelist>
+				<!-- 
+				Original:
+				<file name="${java.home}\..\lib\ant-javafx.jar"/>
+				<file name="${java.home}\lib\jfxrt.jar"/> -->
+				<!-- 
+				Fixed path for the following JDKs but still doesn't work:
+					JDK 1.8.0_121 (x64)
+					JDK 1.8.0_121 (x86)
+				<file name="${java.home}\..\lib\ant-javafx.jar"/>
+				<file name="${java.home}\lib\ext\jfxrt.jar"/> -->
+				<file name="${java.home}\..\lib\ant-javafx.jar"/>
+				<file name="${java.home}\lib\ext\jfxrt.jar"/>
+				<file name="../rsrc/icons"/>
+			</filelist>
+		</path>
+	
+		<taskdef resource="com/sun/javafx/tools/ant/antlib.xml"
+			uri="javafx:com.sun.javafx.tools.ant"
+			classpathref="fxant"/>
+	</target>
+	<target name="setup-staging-area">
+		<delete dir="externalLibs" />
+		<delete dir="project" />
+		<delete dir="projectRefs" />
+	
+		<!-- <mkdir dir="externalLibs" /> -->
+	
+	
+		<mkdir dir="project" />
+		<copy todir="project">
+			<fileset dir="..">
+				<include name="style/**" />
+			</fileset>
+		</copy>
+		<copy todir="project">
+			<fileset dir="..">
+				<include name="src/**" />
+			</fileset>
+		</copy>
+	
+		<mkdir dir="projectRefs" />
+	</target>
+	<target name='do-compile'>
+		<delete dir="build" />
+		<mkdir dir="build/src" />
+		<mkdir dir="build/libs" />
+		<mkdir dir="build/classes" />
+	
+		<!-- Copy project-libs references -->
+		<!-- <copy todir="build/libs">
+			<fileset dir="externalLibs">
+			</fileset>
+		</copy> -->
+	
+		<!-- Copy project references -->
+	
+		<!-- Copy project sources itself -->
+		<copy todir="build/src">
+			<fileset dir="project/src">
+				<include name="**/*"/>
+			</fileset>
+		</copy>
+		<copy todir="build/src">
+			<fileset dir="project/style">
+				<include name="**/*"/>
+			</fileset>
+		</copy>
+	
+		<javac includeantruntime="false" source="1.8" target="1.8" srcdir="build/src" destdir="build/classes" encoding="UTF-8">
+			<classpath>
+				<fileset dir="build/libs">
+					<include name="*"/>
+				</fileset>
+			</classpath>
+		</javac>
+	
+		<!-- Copy over non Java-Files -->
+		<copy todir="build/classes">
+		<fileset dir="project/src">
+			<exclude name="**/*.java"/>
+		</fileset>
+		<fileset dir="project/style">
+			<exclude name="**/*.java"/>
+			<exclude name="icon_white.png"/>
+		</fileset>
+		</copy>
+	
+	
+	</target>
+	<target name="do-deploy" depends="setup-staging-area, do-compile, init-fx-tasks">
+		<delete file="dist"/>
+		<delete file="deploy" />
+	
+		<mkdir dir="dist" />
+		<!-- <mkdir dir="dist/libs" />
+	
+		<copy todir="dist/libs">
+			<fileset dir="externalLibs">
+				<include name="*" />
+			</fileset>
+		</copy> -->
+	
+	
+		<fx:resources id="appRes">
+			<fx:fileset dir="dist" includes="RestYourEyes.jar"/>
+			<!-- <fx:fileset dir="dist" includes="libs/*"/> -->
+		</fx:resources>
+	
+		<fx:application id="fxApplication"
+			name="RestYourEyes"
+			mainClass="restyoureyes.RestYourEyes"
+			version="0.5"
+		/>
+	
+		<mkdir dir="build/classes/META-INF" />
+	
+	
+	
+		<fx:jar destfile="dist/RestYourEyes.jar">
+			<fx:application refid="fxApplication"/>
+			<fileset dir="build/classes">
+			</fileset>
+			<fx:resources refid="appRes"/>
+	
+			<manifest>
+				<attribute name="Implementation-Vendor" value="SeanP Software"/>
+				<attribute name="Implementation-Title" value="RestYourEyes"/>
+				<attribute name="Implementation-Version" value="0.5"/>
+				<attribute name="JavaFX-Feature-Proxy" value="None"/>
+			</manifest>
+		</fx:jar>
+	
+	
+		<mkdir dir="deploy" />
+		
+		<!-- Need to use ${basedir} because somehow the ant task is calculating the directory differently -->
+		<fx:deploy
+			embedJNLP="false"
+			extension="false"
+			includeDT="false"
+			offlineAllowed="true"
+			outdir="${basedir}/deploy"
+			outfile="RestYourEyes" nativeBundles="image"
+			updatemode="background" >
+	
+			<fx:platform basedir="${java.home}"/>
+			<fx:info title="RestYourEyes" vendor="SeanP Software"/>
+	
+			<fx:application refId="fxApplication"/>
+			<fx:resources refid="appRes"/>
+		</fx:deploy>
+	
+		<copy todir="deploy/bundles/RestYourEyes/app">
+			<fileset dir="../rsrc">
+				<include name="Prefs.ini"/>
+			</fileset>
+			<fileset dir="../style">
+				<include name="icon_white.png"/>
+			</fileset>
+		</copy>
+		
+		<delete dir="../dist" />
+		<mkdir dir="../dist" />
+		<copy todir="../dist">
+			<fileset dir="deploy">
+				<include name="**/*"/>
+			</fileset>
+		</copy>
+		
+		
+		<delete dir="build" />
+		<delete dir="project" />
+		<delete dir="projectRefs" />
+		<delete dir="dist" />
+		<delete dir="deploy" deleteonexit="true"/>
+		
+		
+	</target>
+</project>
