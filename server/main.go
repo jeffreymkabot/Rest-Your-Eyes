@@ -1,25 +1,31 @@
 package main
 
 import (
+	"context"
 	"flag"
-	"fmt"
 	"log"
 	"net/http"
 	"os"
-	"strconv"
+	"os/signal"
+	"runtime"
 	"sync"
 	"time"
 
 	"github.com/go-ini/ini"
-	"gopkg.in/toast.v1"
 )
 
 const defaultInterval = 1200000
 
-type prefs struct {
-	srcfile  string
+type app interface {
+	notify(string, string) error
+	close()
+}
 
-	mu       sync.RWMutex
+type prefs struct {
+	srcfile string
+
+	// reads on GET /interval could race with writes on PATCH /interval
+	mu       sync.Mutex
 	Interval int64
 }
 
@@ -47,9 +53,7 @@ func (p *prefs) saveTo(file string) error {
 	if err != nil && !os.IsNotExist(err) {
 		return err
 	}
-	p.mu.RLock()
 	err = existing.ReflectFrom(p)
-	p.mu.RUnlock()
 	if err != nil {
 		return err
 	}
@@ -63,75 +67,67 @@ func (p *prefs) saveTo(file string) error {
 	return err
 }
 
+func cron(data *prefs, updates <-chan int64, queries chan<- time.Time, app app) {
+	d := data.Interval
+	var end time.Time
+	var timer <-chan time.Time
+	reset := func(ms int64) {
+		timer = time.After(time.Duration(ms) * time.Millisecond)
+		end = time.Now().Add(time.Duration(ms) * time.Millisecond)
+	}
+	reset(d)
+
+	for {
+		select {
+		case <-timer:
+			reset(d)
+			log.Print("Rest your eyes :))")
+			if app != nil {
+				app.notify("Rest your eyes", ":))")
+			}
+		case d = <-updates:
+			reset(d)
+			data.mu.Lock()
+			data.Interval = d
+			data.mu.Unlock()
+			data.save()
+		case queries <- end:
+		}
+	}
+}
+
 func main() {
 	cfg := flag.String("f", "Prefs.ini", "config file")
 	flag.Parse()
 	log.Printf("prefs from file %v", *cfg)
 
-	data, err := load(*cfg)
-	if err != nil {
-		log.Fatal(err)
+	data, _ := load(*cfg)
+	log.Printf("initial interval %vms", data.Interval)
+	log.Printf("os %v", runtime.GOOS)
+
+	var app app
+	var err error
+	if runtime.GOOS == "windows" {
+		app, err = NewWindowsApp()
+		if err != nil {
+			log.Fatal(err)
+		}
+		defer app.close()
 	}
-	log.Printf("starting interval %vms", data.Interval)
 
 	updates := make(chan int64)
-	go cron(data, updates)
+	queries := make(chan time.Time)
+	go cron(data, updates, queries, app)
 
-	http.HandleFunc("/interval", func(w http.ResponseWriter, r *http.Request) {
-		switch r.Method {
-		case "GET":
-			data.mu.RLock()
-			fmt.Fprintf(w, "%v", data.Interval)
-			data.mu.RUnlock()
-		case "PATCH":
-			d, err := strconv.Atoi(r.FormValue("interval"))
-			if err != nil {
-				fmt.Fprintf(w, "err %v", err)
-				w.WriteHeader(http.StatusBadRequest)
-				return
-			}
-			updates <- int64(d)
-			w.WriteHeader(http.StatusAccepted)
-			return
-		default:
-			w.WriteHeader(http.StatusMethodNotAllowed)
-			return
-		}
-	})
-	http.ListenAndServe(":8080", nil)
-}
+	mux := http.NewServeMux()
+	mux.HandleFunc("/interval", intervalHandler(data, updates))
+	mux.HandleFunc("/remaining", remainingHandler(queries))
+	server := &http.Server{Addr: "localhost:8080", Handler: mux}
+	go server.ListenAndServe()
 
-func cron(data *prefs, updates <-chan int64) {
-	var timer <-chan time.Time
-	var d int64
-	var ok bool
-	for {
-		data.mu.RLock()
-		timer = time.After(time.Duration(data.Interval) * time.Millisecond)
-		data.mu.RUnlock()
-		select {
-		case d, ok = <-updates:
-			if !ok {
-				return
-			}
-			data.mu.Lock()
-			data.Interval = d
-			data.mu.Unlock()
-			data.save()
-		case <-timer:
-			fmt.Println("Rest your eyes :))")
-			notice("8)", "take a break").Push()
-		}
-	}
-}
-
-func notice(title string, msg string) *toast.Notification {
-	return &toast.Notification{
-		AppID:               "rest your eyes",
-		Title:               title,
-		Message:             msg,
-		Duration:            toast.Short,
-		Audio:               toast.Silent,
-		ActivationArguments: "http://localhost:8080/interval",
-	}
+	// need to gracefully shutdown server to yield os system tray resources
+	c := make(chan os.Signal, 1)
+	signal.Notify(c, os.Interrupt)
+	<-c
+	server.Shutdown(context.Background())
 }
