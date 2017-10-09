@@ -23,15 +23,28 @@ type prefs struct {
 	Interval int64
 }
 
+func load(cfg string) (*prefs, error) {
+	prefs := &prefs{
+		srcfile:  cfg,
+		Interval: defaultInterval,
+	}
+	err := ini.MapTo(prefs, cfg)
+	if err == nil || os.IsNotExist(err) {
+		return prefs, nil
+	}
+	return nil, err
+}
+
 func (p *prefs) save() error {
 	return p.saveTo(p.srcfile)
 }
 
 func (p *prefs) saveTo(file string) error {
-	// load existing cfg and append with p
-	// to prevent erasing any values not in p
-	existing, err := ini.Load(file)
-	if err != nil {
+	// load existing cfg (if exists) and append with p
+	// to prevent erasing any values not mapped in p
+	existing := ini.Empty()
+	err := existing.Append(file)
+	if err != nil && !os.IsNotExist(err) {
 		return err
 	}
 	p.mu.RLock()
@@ -41,7 +54,7 @@ func (p *prefs) saveTo(file string) error {
 		return err
 	}
 
-	f, err := os.OpenFile(file, os.O_TRUNC|os.O_WRONLY, 0600)
+	f, err := os.OpenFile(file, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0600)
 	if err != nil {
 		return err
 	}
@@ -53,28 +66,23 @@ func (p *prefs) saveTo(file string) error {
 func main() {
 	cfg := flag.String("f", "Prefs.ini", "config file")
 	flag.Parse()
-	log.Printf("prefs file %v", *cfg)
+	log.Printf("prefs from file %v", *cfg)
 
-	prefs := &prefs{
-		srcfile:  *cfg,
-		Interval: defaultInterval,
-	}
-
-	err := ini.MapTo(prefs, *cfg)
+	data, err := load(*cfg)
 	if err != nil {
 		log.Fatal(err)
 	}
-	log.Printf("starting interval %vms", prefs.Interval)
+	log.Printf("starting interval %vms", data.Interval)
 
 	updates := make(chan int64)
-	go cron(prefs, updates)
+	go cron(data, updates)
 
 	http.HandleFunc("/interval", func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
 		case "GET":
-			prefs.mu.RLock()
-			fmt.Fprintf(w, "%v", prefs.Interval)
-			prefs.mu.RUnlock()
+			data.mu.RLock()
+			fmt.Fprintf(w, "%v", data.Interval)
+			data.mu.RUnlock()
 		case "PATCH":
 			d, err := strconv.Atoi(r.FormValue("interval"))
 			if err != nil {
