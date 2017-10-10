@@ -4,7 +4,7 @@ import "github.com/lxn/walk"
 
 type windowsApp struct {
 	main *walk.MainWindow
-	ni *walk.NotifyIcon
+	ni   *walk.NotifyIcon
 }
 
 func NewWindowsApp() (*windowsApp, error) {
@@ -25,16 +25,17 @@ func NewWindowsApp() (*windowsApp, error) {
 		return nil, err
 	}
 	app.ni = ni
-	
+
 	if err := ni.SetIcon(icon); err != nil {
 		ni.Dispose()
 		return nil, err
 	}
-	
+
 	if err := ni.SetVisible(true); err != nil {
 		ni.Dispose()
 		return nil, err
 	}
+	
 	return app, nil
 }
 

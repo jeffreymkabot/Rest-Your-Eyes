@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"log"
 	"net/http"
@@ -24,21 +25,24 @@ type app interface {
 type prefs struct {
 	srcfile string
 
-	// reads on GET /interval could race with writes on PATCH /interval
-	mu       sync.Mutex
-	Interval int64
+	// reads on GET /prefs could race with writes on PATCH /prefs
+	mu                  sync.Mutex
+	Interval            int64
+	DarkTheme           int8
+	AggressiveReminders int8
 }
 
+// will return default prefs on any error
 func load(cfg string) (*prefs, error) {
 	prefs := &prefs{
 		srcfile:  cfg,
 		Interval: defaultInterval,
 	}
 	err := ini.MapTo(prefs, cfg)
-	if err == nil || os.IsNotExist(err) {
-		return prefs, nil
+	if os.IsNotExist(err) {
+		err = nil
 	}
-	return nil, err
+	return prefs, err
 }
 
 func (p *prefs) save() error {
@@ -67,7 +71,17 @@ func (p *prefs) saveTo(file string) error {
 	return err
 }
 
-func cron(data *prefs, updates <-chan int64, queries chan<- time.Time, app app) {
+func (p *prefs) isValid() error {
+	if p.Interval <= 0 {
+		return errors.New("interval must be positive")
+	}
+	if p.DarkTheme != 0 && p.DarkTheme != 1 {
+		return errors.New("dark theme must be 0 or 1")
+	}
+	return nil
+}
+
+func cron(data *prefs, patch <-chan *prefs, remaining chan<- time.Time, app app) {
 	d := data.Interval
 	var end time.Time
 	var timer <-chan time.Time
@@ -79,19 +93,31 @@ func cron(data *prefs, updates <-chan int64, queries chan<- time.Time, app app) 
 
 	for {
 		select {
+		case remaining <- end:
 		case <-timer:
 			reset(d)
 			log.Print("Rest your eyes :))")
 			if app != nil {
 				app.notify("Rest your eyes", ":))")
 			}
-		case d = <-updates:
-			reset(d)
+		case tmp := <-patch:
+			// tmp validated upstream
+			changed := false
 			data.mu.Lock()
-			data.Interval = d
+			if tmp.Interval != d {
+				d = tmp.Interval
+				data.Interval = d
+				changed = true
+				reset(d)
+			}
+			if tmp.DarkTheme != data.DarkTheme {
+				data.DarkTheme = tmp.DarkTheme
+				changed = true
+			}
 			data.mu.Unlock()
-			data.save()
-		case queries <- end:
+			if changed {
+				data.save()
+			}
 		}
 	}
 }
@@ -115,13 +141,13 @@ func main() {
 		defer app.close()
 	}
 
-	updates := make(chan int64)
-	queries := make(chan time.Time)
-	go cron(data, updates, queries, app)
+	patch := make(chan *prefs)
+	remaining := make(chan time.Time)
+	go cron(data, patch, remaining, app)
 
 	mux := http.NewServeMux()
-	mux.HandleFunc("/interval", intervalHandler(data, updates))
-	mux.HandleFunc("/remaining", remainingHandler(queries))
+	mux.HandleFunc("/prefs", prefsHandler(data, patch))
+	mux.HandleFunc("/remaining", remainingHandler(remaining))
 	server := &http.Server{Addr: "localhost:8080", Handler: mux}
 	go server.ListenAndServe()
 
@@ -129,5 +155,8 @@ func main() {
 	c := make(chan os.Signal, 1)
 	signal.Notify(c, os.Interrupt)
 	<-c
-	server.Shutdown(context.Background())
+
+	ctx, end := context.WithTimeout(context.Background(), 1*time.Second)
+	log.Print(server.Shutdown(ctx))
+	end()
 }

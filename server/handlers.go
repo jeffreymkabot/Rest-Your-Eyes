@@ -1,32 +1,43 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/http"
-	"strconv"
 	"time"
 )
 
-func intervalHandler(data *prefs, updates chan<- int64) func(http.ResponseWriter, *http.Request) {
+func prefsHandler(data *prefs, patch chan<- *prefs) func(http.ResponseWriter, *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
 		case "GET":
 			data.mu.Lock()
-			fmt.Fprintf(w, "%v", data.Interval)
+			obj, err := json.Marshal(data)
 			data.mu.Unlock()
+			if err != nil {
+				http.Error(w, fmt.Sprintf("err %v", err), http.StatusInternalServerError)
+			}
+			w.Header().Add("Content-Type", "application/json")
+			fmt.Fprintf(w, "%s", obj)
 			return
 		case "PATCH":
-			d, err := strconv.Atoi(r.FormValue("interval"))
-			if err != nil {
+			tmp := &prefs{}
+			decoder := json.NewDecoder(r.Body)
+			if err := decoder.Decode(tmp); err != nil {
+				http.Error(w, fmt.Sprintf("err %v", err), http.StatusBadRequest)
+				return
+			}
+			if err := tmp.isValid(); err != nil {
 				http.Error(w, fmt.Sprintf("err %v", err), http.StatusBadRequest)
 				return
 			}
 			select {
-			case updates <- int64(d):
-				w.WriteHeader(http.StatusAccepted)
+			case patch <- tmp:
 			case <-time.After(1 * time.Second):
 				http.Error(w, "timeout", http.StatusRequestTimeout)
+				return
 			}
+			w.WriteHeader(http.StatusAccepted)
 			return
 		default:
 			http.Error(w, "unsupported method", http.StatusMethodNotAllowed)
@@ -41,7 +52,7 @@ func remainingHandler(queries <-chan time.Time) func(http.ResponseWriter, *http.
 		case "GET":
 			select {
 			case end := <-queries:
-				fmt.Fprintf(w, "%v", time.Until(end))
+				fmt.Fprintf(w, "%v", int64(time.Until(end)/time.Millisecond))
 			case <-time.After(1 * time.Second):
 				http.Error(w, "timeout", http.StatusRequestTimeout)
 			}
