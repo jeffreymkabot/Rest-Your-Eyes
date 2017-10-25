@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/go-ini/ini"
+	"github.com/gorilla/websocket"
 )
 
 const defaultInterval = 1200000
@@ -123,7 +124,7 @@ func cron(data *prefs, patch <-chan *prefs, remaining chan<- time.Time, app app)
 }
 
 func main() {
-	cfg := flag.String("f", "rsrc/Prefs.ini", "config file")
+	cfg := flag.String("f", "./client/rsrc/Prefs.ini", "config file")
 	flag.Parse()
 	log.Printf("prefs from file %v", *cfg)
 
@@ -143,11 +144,16 @@ func main() {
 
 	patch := make(chan *prefs)
 	remaining := make(chan time.Time)
+	// TODO make manipulations of the connection slice thread-safe
+	// TODO kill stale connections
+	// TODO notify active clients when timer goes off
+	clients := []*websocket.Conn{}
 	go cron(data, patch, remaining, app)
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/prefs", prefsHandler(data, patch))
 	mux.HandleFunc("/remaining", remainingHandler(remaining))
+	mux.HandleFunc("/websocket", websocketHandler(&clients))
 	server := &http.Server{Addr: "localhost:8080", Handler: mux}
 	go server.ListenAndServe()
 

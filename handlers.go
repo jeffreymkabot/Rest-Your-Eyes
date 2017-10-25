@@ -3,9 +3,14 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 	"time"
+
+	"github.com/gorilla/websocket"
 )
+
+var upgrader = &websocket.Upgrader{}
 
 func prefsHandler(data *prefs, patch chan<- *prefs) func(http.ResponseWriter, *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -61,5 +66,18 @@ func remainingHandler(queries <-chan time.Time) func(http.ResponseWriter, *http.
 			http.Error(w, "unsupported method", http.StatusMethodNotAllowed)
 			return
 		}
+	}
+}
+
+func websocketHandler(clients *[]*websocket.Conn) func(http.ResponseWriter, *http.Request) {
+	return func(w http.ResponseWriter, r *http.Request) {
+		ws, err := upgrader.Upgrade(w, r, nil)
+		if err != nil {
+			log.Printf("error upgrade connection %v", err)
+			return
+		}
+		// add ws to list of clients
+		log.Printf("upgraded connection %#v", ws)
+		*clients = append(*clients, ws)
 	}
 }
