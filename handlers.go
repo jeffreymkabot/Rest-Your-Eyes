@@ -69,7 +69,7 @@ func remainingHandler(queries <-chan time.Time) func(http.ResponseWriter, *http.
 	}
 }
 
-func websocketHandler(clients *[]*websocket.Conn) func(http.ResponseWriter, *http.Request) {
+func websocketHandler(clients *clients) func(http.ResponseWriter, *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
 		ws, err := upgrader.Upgrade(w, r, nil)
 		if err != nil {
@@ -77,7 +77,16 @@ func websocketHandler(clients *[]*websocket.Conn) func(http.ResponseWriter, *htt
 			return
 		}
 		// add ws to list of clients
-		log.Printf("upgraded connection %#v", ws)
-		*clients = append(*clients, ws)
+		// read and discard its messages indefintely
+		clients.mu.Lock()
+		clients.list = append(clients.list, ws)
+		clients.mu.Unlock()
+		for {
+			_, _, err := ws.ReadMessage()
+			if err != nil {
+				ws.Close()
+				return
+			}
+		}
 	}
 }
