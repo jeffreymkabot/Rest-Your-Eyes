@@ -25,6 +25,12 @@ func prefsHandler(data *prefs, patch chan<- *prefs) func(http.ResponseWriter, *h
 			w.Header().Add("Content-Type", "application/json")
 			fmt.Fprintf(w, "%s", obj)
 			return
+		case "POST":
+			if r.Header.Get("X-HTTP-Method-Override") != "PATCH" {
+				http.Error(w, "unsupported method", http.StatusMethodNotAllowed)
+				return
+			}
+			fallthrough
 		case "PATCH":
 			tmp := &prefs{}
 			decoder := json.NewDecoder(r.Body)
@@ -58,6 +64,23 @@ func remainingHandler(queries <-chan time.Time) func(http.ResponseWriter, *http.
 			select {
 			case end := <-queries:
 				fmt.Fprintf(w, "%v", int64(time.Until(end)/time.Millisecond))
+			case <-time.After(1 * time.Second):
+				http.Error(w, "timeout", http.StatusRequestTimeout)
+			}
+			return
+		default:
+			http.Error(w, "unsupported method", http.StatusMethodNotAllowed)
+			return
+		}
+	}
+}
+
+func toggleHandler(toggle chan<- struct{}) func(http.ResponseWriter, *http.Request) {
+	return func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case "GET":
+			select {
+			case toggle <- struct{}{}:
 			case <-time.After(1 * time.Second):
 				http.Error(w, "timeout", http.StatusRequestTimeout)
 			}

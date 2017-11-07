@@ -15,6 +15,7 @@ import java.nio.file.AccessDeniedException;
 import java.time.Duration;
 import java.time.Instant;
 import javax.imageio.IIOException;
+
 import javafx.application.Application;
 import javafx.application.Platform;
 import javafx.beans.value.ObservableValue;
@@ -43,70 +44,63 @@ import javafx.stage.Stage;
 
 /**
  * This class represents an application that reminds the user to take a break from
- *  screen time to avoid eye strain. A reminder is sent every time the configurable
- *  interval period expires.
+ * screen time to avoid eye strain. A reminder is sent every time the configurable
+ * interval period expires.
  *
  * @author Sean Pesce
  */
 public class RestYourEyes extends Application {
 
-    // Configurable settings
-    private static Prefs prefs;
-    private static boolean hideOnStartup = DEFAULT_STARTUP_HIDE;
+	// Configurable settings
+	private static Client client;
+	private static Prefs prefs;
+	private static boolean hideOnStartup = DEFAULT_STARTUP_HIDE;
 
-    private static  double windowWidth = DEFAULT_WINDOW_WIDTH;
-    private static  double windowHeight = DEFAULT_WINDOW_HEIGHT;
+	private static double windowWidth = DEFAULT_WINDOW_WIDTH;
+	private static double windowHeight = DEFAULT_WINDOW_HEIGHT;
 
 
-    // User Interface nodes
-    private static  Stage stage;
-    private static  Scene scene;
-    private static  Group group;
-    private static  VBox primaryVBox;
-    private static  MenuBar fileToolbar;
-        private static  Menu fileMenu;
-            private static  MenuItem fileHide;
-            private static  MenuItem fileExit;
-        private static  Menu optionsMenu;
-            private static  MenuItem toggleReminders;
-            private static  MenuItem toggleTheme;
-        private static  Menu advancedMenu;
-            private static  Menu configMenu;
-                private static  MenuItem editConfig;
-                private static  MenuItem reloadConfig;
-    private static  VBox nextReminderVBox;
-    private static  Label nextReminderLbl;
-    private static  Label timeRemainingLbl;
-    private static  Tooltip timeRemainingLblTooltip;
-    private static  HBox setIntervalHBox;
-    private static  TextField newIntervalField;
-    private static  ComboBox<String> unitPicker;
-    private static  Button setIntervalBt;
+	// User Interface nodes
+	private static Stage stage;
+	private static Scene scene;
+	private static Group group;
+	private static VBox primaryVBox;
+	private static MenuBar fileToolbar;
+	private static Menu fileMenu;
+	private static MenuItem fileHide;
+	private static MenuItem fileExit;
+	private static Menu optionsMenu;
+	private static MenuItem toggleReminders;
+	private static MenuItem toggleTheme;
+	private static VBox nextReminderVBox;
+	private static Label nextReminderLbl;
+	private static Label timeRemainingLbl;
+	private static Tooltip timeRemainingLblTooltip;
+	private static HBox setIntervalHBox;
+	private static TextField newIntervalField;
+	private static ComboBox<String> unitPicker;
+	private static Button setIntervalBt;
 
-    private static  Alert reminder;
-    private static  HBox reminderBtPane;
-    private static  Button disableRemindersBt;
+	private static Alert reminder;
+	private static HBox reminderBtPane;
+	private static Button disableRemindersBt;
 
-    private static  java.awt.TrayIcon trayIcon;
-    private static  java.awt.MenuItem toggleRemindersTrayItem;
+	private static java.awt.TrayIcon trayIcon;
+	private static java.awt.MenuItem toggleRemindersTrayItem;
 
-    // Variables
-    private static  boolean   runLoop = true,
-                            disableReminders = false,
-                            sysTraySupported = true;
-    private static  Instant nextReminder;
+	// Variables
+	private static boolean runLoop = true,
+			disableReminders = false,
+			sysTraySupported = true;
+	private static Instant nextReminder;
 
 
 	/**
 	 * @param args The list of command line arguments passed to the program.
 	 */
 	public static void main(String[] args) {
-
 		try {
-
 			launch(args);
-
-
 		} catch (Exception ex) {
 			// Catch and print any exceptions to error log
 			StringWriter sw = new StringWriter();
@@ -120,6 +114,15 @@ public class RestYourEyes extends Application {
 			}
 			ex.printStackTrace();
 		}
+	}
+
+	/**
+	 *
+	 * @throws Exception
+	 */
+	@Override
+	public void init() throws Exception {
+		client = new Client("8080");
 	}
 
 
@@ -139,10 +142,9 @@ public class RestYourEyes extends Application {
 	public void start(Stage newStage) throws Exception {
 
 		try {
-			System.out.println("hello world " + Client.getRemaining());
+			System.out.println("hello world " + client.getRemaining());
 			stage = newStage;
-			// initWebsocket();
-			getUserPrefs();
+			prefs = client.getPrefs();
 			initWindow();
 			initSystemTray();
 			initEventHandlers();
@@ -165,9 +167,12 @@ public class RestYourEyes extends Application {
 					Instant nowStart = Instant.now();
 					javax.swing.SwingUtilities.invokeLater(() -> {
 						if (!disableReminders) {
-							trayIcon.displayMessage(PROGRAM_TITLE, "Reminding every " + getDurationAsString(Duration.between(nowStart, nowStart.plusMillis(prefs.getInterval())), false), java.awt.TrayIcon.MessageType.INFO);
+							trayIcon.displayMessage(PROGRAM_TITLE, "Reminding every " + getDurationAsString(Duration
+									.between(nowStart, nowStart.plusMillis(prefs.getInterval())), false), java.awt
+									.TrayIcon.MessageType.INFO);
 						} else {
-							trayIcon.displayMessage(PROGRAM_TITLE, "Reminders disabled", java.awt.TrayIcon.MessageType.INFO);
+							trayIcon.displayMessage(PROGRAM_TITLE, "Reminders disabled", java.awt.TrayIcon.MessageType
+									.INFO);
 						}
 					});
 				} else {
@@ -195,11 +200,6 @@ public class RestYourEyes extends Application {
 		}
 
 	}
-
-	private static void getUserPrefs() {
-		prefs = Client.getPrefs();
-	}
-
 
 	/**
 	 * Initializes the main program window.
@@ -239,15 +239,7 @@ public class RestYourEyes extends Application {
 			toggleTheme.setText("Use dark color scheme");
 		}
 		optionsMenu.getItems().addAll(toggleReminders, toggleTheme);
-		advancedMenu = new Menu("Advanced");
-		configMenu = new Menu("Configure");
-		editConfig = new MenuItem("Edit startup config");
-		reloadConfig = new MenuItem("Reload startup config");
-		editConfig.setDisable(true);
-		reloadConfig.setDisable(true);
-		advancedMenu.getItems().add(configMenu);
-		configMenu.getItems().addAll(editConfig, reloadConfig);
-		fileToolbar.getMenus().addAll(fileMenu, optionsMenu, advancedMenu);
+		fileToolbar.getMenus().addAll(fileMenu, optionsMenu);
 
 
 		nextReminderLbl = new Label("Next reminder:");
@@ -255,7 +247,8 @@ public class RestYourEyes extends Application {
 		timeRemainingLbl = new Label("--:--:--.---");
 		timeRemainingLbl.getStyleClass().add("timer");
 		timeRemainingLbl.setPadding(new Insets(3.0, 10.0, 3.0, 10.0));
-		timeRemainingLblTooltip = new Tooltip("Reminders are currently disabled.\nYou can enable reminders from the Options menu.");
+		timeRemainingLblTooltip = new Tooltip("Reminders are currently disabled.\nYou can enable reminders from the " +
+				"Options menu.");
 		timeRemainingLblTooltip.getStyleClass().add("timer_tooltip");
 		timeRemainingLbl.setTooltip(timeRemainingLblTooltip);
 		nextReminderVBox = new VBox(nextReminderLbl, timeRemainingLbl);
@@ -350,7 +343,8 @@ public class RestYourEyes extends Application {
 					toggleReminders();
 				});
 
-				// Convention for tray icons seems to be to set the default icon for opening the application stage in a bold font.
+				// Convention for tray icons seems to be to set the default icon for opening the application stage in
+				// a bold font.
 				java.awt.Font defaultFont = java.awt.Font.decode(null);
 				java.awt.Font boldFont = defaultFont.deriveFont(java.awt.Font.BOLD);
 				openItem.setFont(boldFont);
@@ -417,10 +411,8 @@ public class RestYourEyes extends Application {
 		remStage.setTitle("Rest your eyes!");
 		DialogPane dPane = reminder.getDialogPane();
 		dPane.setPrefWidth(350);
-		//dPane.setMaxWidth(201);
 		dPane.setPrefHeight(130);
 		dPane.setMaxHeight(131);
-		//remStage.setMaxWidth(201);
 		remStage.setMaxHeight(131);
 		dPane.setPadding(new Insets(0.0, 0.0, 0.0, 0.0));
 
@@ -467,11 +459,13 @@ public class RestYourEyes extends Application {
 	 */
 	private static void initEventHandlers() {
 
-		fileToolbar.heightProperty().addListener((ObservableValue<? extends Number> observableValue, Number oldHeight, Number newHeight) -> {
+		fileToolbar.heightProperty().addListener((ObservableValue<? extends Number> observableValue, Number oldHeight,
+												  Number newHeight) -> {
 			primaryVBox.setPadding(new Insets(fileToolbar.getHeight(), 10.0, 10.0, 10.0));
 		});
 
-		scene.widthProperty().addListener((ObservableValue<? extends Number> observableValue, Number oldWidth, Number newWidth) -> {
+		scene.widthProperty().addListener((ObservableValue<? extends Number> observableValue, Number oldWidth, Number
+				newWidth) -> {
 			primaryVBox.setPrefWidth(scene.getWidth());
 			fileToolbar.setPrefWidth(scene.getWidth());
 		});
@@ -479,7 +473,8 @@ public class RestYourEyes extends Application {
 		fileToolbar.setPrefWidth(scene.getWidth());
 
 
-		scene.heightProperty().addListener((ObservableValue<? extends Number> observableValue, Number oldHeight, Number newHeight) -> {
+		scene.heightProperty().addListener((ObservableValue<? extends Number> observableValue, Number oldHeight,
+											Number newHeight) -> {
 			primaryVBox.setPrefHeight(scene.getHeight());
 		});
 		primaryVBox.setPrefHeight(scene.getHeight());
@@ -492,7 +487,8 @@ public class RestYourEyes extends Application {
 		});
 
 
-		newIntervalField.textProperty().addListener((ObservableValue<? extends String> observableValue, String oldText, String newText) -> {
+		newIntervalField.textProperty().addListener((ObservableValue<? extends String> observableValue, String
+				oldText, String newText) -> {
 			checkInput();
 		});
 
@@ -522,7 +518,7 @@ public class RestYourEyes extends Application {
 				}
 
 				prefs.setInterval(newInt);
-				Client.setPrefs(prefs);
+				client.setPrefs(prefs);
 
 			} catch (NumberFormatException nfEx) {
 				System.out.println("ERROR: Invalid interval specified.");
@@ -540,20 +536,11 @@ public class RestYourEyes extends Application {
 			prefs.setDarkTheme(!prefs.isDarkTheme());
 			updateElements();
 			try {
-				Client.setPrefs(prefs);
+				client.setPrefs(prefs);
 			} catch (IOException ex) {
 				ex.printStackTrace();
 				// TODO IOException probably means parent process killed
 			}
-		});
-
-
-		fileHide.setOnAction(e -> stage.hide());
-
-
-		reloadConfig.setOnAction(e -> {
-			getUserPrefs();
-			updateElements();
 		});
 
 		stage.setOnCloseRequest(e -> {
@@ -565,6 +552,7 @@ public class RestYourEyes extends Application {
 			}
 		});
 
+		fileHide.setOnAction(e -> stage.hide());
 
 		fileExit.setOnAction(e -> {
 			runLoop = false;
@@ -594,7 +582,14 @@ public class RestYourEyes extends Application {
 		System.out.println("Starting timer...");
 
 		Instant now = Instant.now();
-		nextReminder = now.plusMillis(Client.getRemaining());
+		long remaining = 0;
+		try {
+			remaining = client.getRemaining();
+		} catch (Exception ex) {
+			ex.printStackTrace();
+			Platform.exit();
+		}
+		nextReminder = now.plusMillis(remaining);
 
 		updateElements();
 
@@ -632,9 +627,11 @@ public class RestYourEyes extends Application {
 
 			// TODO if-body on websocket message
 			if (false && milliseconds < 0 || seconds < 0 || minutes < 0 || hours < 0) {
-				System.out.println("[" + new java.util.Date() + "] Be sure to take a break from screen time to avoid eye strain!");
+				System.out.println("[" + new java.util.Date() + "] Be sure to take a break from screen time to avoid " +
+						"eye strain!");
 				if (trayIcon != null) {
-					trayIcon.displayMessage(PROGRAM_TITLE + " Reminder", "Be sure to take a break from screen time to avoid eye strain!", java.awt.TrayIcon.MessageType.INFO);
+					trayIcon.displayMessage(PROGRAM_TITLE + " Reminder", "Be sure to take a break from screen time to " +
+							"avoid eye strain!", java.awt.TrayIcon.MessageType.INFO);
 				}
 
 				if (prefs.isAggressiveReminders() || trayIcon == null || !sysTraySupported) {
@@ -744,7 +741,8 @@ public class RestYourEyes extends Application {
 	private static void updateElements() {
 
 		Instant nowStart = Instant.now();
-		final String intervalString = "Reminding every " + getDurationAsString(Duration.between(nowStart, nowStart.plusMillis(prefs.getInterval())), false);
+		final String intervalString = "Reminding every " + getDurationAsString(Duration.between(nowStart, nowStart
+				.plusMillis(prefs.getInterval())), false);
 
 		// Set system tray elements
 		if (trayIcon != null) {
@@ -776,21 +774,14 @@ public class RestYourEyes extends Application {
 			}
 
 
-			if (new File(CONFIG_FILE).exists()) {
-				editConfig.setDisable(false);
-				reloadConfig.setDisable(false);
-			} else {
-				editConfig.setDisable(true);
-				reloadConfig.setDisable(true);
-			}
-
-
 			if (prefs.isDarkTheme()) {
 				toggleTheme.setText("Use light color scheme");
 
 				if (reminder != null) {
-					if (!((Stage) reminder.getDialogPane().getScene().getWindow()).getScene().getStylesheets().contains(DARK_STYLE_SHEET)) {
-						((Stage) reminder.getDialogPane().getScene().getWindow()).getScene().getStylesheets().add(DARK_STYLE_SHEET);
+					if (!((Stage) reminder.getDialogPane().getScene().getWindow()).getScene().getStylesheets()
+							.contains(DARK_STYLE_SHEET)) {
+						((Stage) reminder.getDialogPane().getScene().getWindow()).getScene().getStylesheets().add
+								(DARK_STYLE_SHEET);
 					}
 				}
 
@@ -801,8 +792,10 @@ public class RestYourEyes extends Application {
 				toggleTheme.setText("Use dark color scheme");
 
 				if (reminder != null) {
-					if (((Stage) reminder.getDialogPane().getScene().getWindow()).getScene().getStylesheets().contains(DARK_STYLE_SHEET)) {
-						((Stage) reminder.getDialogPane().getScene().getWindow()).getScene().getStylesheets().remove(DARK_STYLE_SHEET);
+					if (((Stage) reminder.getDialogPane().getScene().getWindow()).getScene().getStylesheets().contains
+							(DARK_STYLE_SHEET)) {
+						((Stage) reminder.getDialogPane().getScene().getWindow()).getScene().getStylesheets().remove
+								(DARK_STYLE_SHEET);
 					}
 				}
 
@@ -823,7 +816,8 @@ public class RestYourEyes extends Application {
 			} else {
 				nextReminderLbl.setText("Reminders disabled.");
 				toggleReminders.setText("Enable reminders");
-				timeRemainingLblTooltip.setText("Reminders are currently disabled.\nYou can enable reminders from the Options menu.");
+				timeRemainingLblTooltip.setText("Reminders are currently disabled.\nYou can enable reminders from the " +
+						"Options menu.");
 				timeRemainingLbl.setText("--:--:--.---");
 
 				if (reminder != null) {
@@ -845,16 +839,12 @@ public class RestYourEyes extends Application {
 	 * Toggles reminder notifications and updates the GUI elements.
 	 */
 	private static void toggleReminders() {
-		disableReminders = !disableReminders;
-
-		if (trayIcon != null) {
-			if (disableReminders) {
-				trayIcon.displayMessage(PROGRAM_TITLE, "Reminders disabled", java.awt.TrayIcon.MessageType.INFO);
-			} else {
-				trayIcon.displayMessage(PROGRAM_TITLE, "Reminders enabled", java.awt.TrayIcon.MessageType.INFO);
-			}
+		try {
+			client.toggleReminders();
+		} catch (IOException ex) {
+			ex.printStackTrace();
+			Platform.exit();
 		}
-
 		updateElements();
 	}
 

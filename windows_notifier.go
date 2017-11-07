@@ -35,7 +35,7 @@ func NewWindowsApp() (*windowsApp, error) {
 		ni.Dispose()
 		return nil, err
 	}
-	
+
 	return app, nil
 }
 

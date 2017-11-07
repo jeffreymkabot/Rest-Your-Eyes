@@ -101,8 +101,9 @@ func (p *prefs) isValid() error {
 	return nil
 }
 
-func cron(data *prefs, patch <-chan *prefs, remaining chan<- time.Time, app app, clients *clients) {
+func cron(data *prefs, patch <-chan *prefs, remaining chan<- time.Time, toggle <-chan struct{}, app app, clients *clients) {
 	d := data.Interval
+	active := true
 	var end time.Time
 	var timer <-chan time.Time
 	reset := func(ms int64) {
@@ -117,11 +118,13 @@ func cron(data *prefs, patch <-chan *prefs, remaining chan<- time.Time, app app,
 		case <-timer:
 			reset(d)
 			log.Print(reminder)
-			clients.mu.Lock()
-			clients.notify(reminder)
-			clients.mu.Unlock()
-			if app != nil {
-				app.notify(reminder, ":)")
+			if active {
+				clients.mu.Lock()
+				clients.notify(reminder)
+				clients.mu.Unlock()
+				if app != nil {
+					app.notify(reminder, ":)")
+				}
 			}
 		case tmp := <-patch:
 			// tmp validated upstream, where an error could be dispatched to client
@@ -141,6 +144,9 @@ func cron(data *prefs, patch <-chan *prefs, remaining chan<- time.Time, app app,
 			if changed {
 				data.save()
 			}
+		case <-toggle:
+			active = !active
+			log.Printf("got toggle")
 		}
 	}
 }
@@ -167,13 +173,15 @@ func main() {
 
 	patch := make(chan *prefs)
 	remaining := make(chan time.Time)
+	toggle := make(chan struct{})
 	clients := &clients{}
-	go cron(data, patch, remaining, app, clients)
+	go cron(data, patch, remaining, toggle, app, clients)
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/prefs", prefsHandler(data, patch))
 	mux.HandleFunc("/remaining", remainingHandler(remaining))
 	mux.HandleFunc("/websocket", websocketHandler(clients))
+	mux.HandleFunc("/toggle", toggleHandler(toggle))
 
 	addr := fmt.Sprintf("localhost:%d", *port)
 	server := &http.Server{Addr: addr, Handler: mux}
