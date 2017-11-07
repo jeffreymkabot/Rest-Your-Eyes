@@ -150,7 +150,7 @@ public class RestYourEyes extends Application {
     public void start(Stage newStage) throws Exception {
 
     	try{
-
+            System.out.println("hello world " + Client.getRemaining());
     		stage = newStage;
             getUserPrefs();
 
