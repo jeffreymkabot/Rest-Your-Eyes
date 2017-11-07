@@ -5,9 +5,33 @@ public class Prefs {
     private boolean darkTheme;
     private boolean aggressiveReminders;
 
-	private Prefs() {}
+	long getInterval() {
+		return interval;
+	}
 
-	public static Prefs defaultPrefs() {
+	void setInterval(long interval) {
+		this.interval = interval;
+	}
+
+	boolean isDarkTheme() {
+		return darkTheme;
+	}
+
+	void setDarkTheme(boolean darkTheme) {
+		this.darkTheme = darkTheme;
+	}
+
+	boolean isAggressiveReminders() {
+		return aggressiveReminders;
+	}
+
+	void setAggressiveReminders(boolean aggressiveReminders) {
+		this.aggressiveReminders = aggressiveReminders;
+	}
+
+	Prefs() {}
+
+	static Prefs defaultPrefs() {
 		Prefs prefs = new Prefs();
 		prefs.interval = Constants.DEFAULT_INTERVAL;
 		prefs.darkTheme = Constants.DEFAULT_USE_DARK_THEME;

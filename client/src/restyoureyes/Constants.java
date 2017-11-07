@@ -23,7 +23,7 @@ public class Constants {
 	 *
 	 */
 	// Start minimized to system tray
-	public static final boolean DEFAULT_STARTUP_HIDE = true;
+	public static final boolean DEFAULT_STARTUP_HIDE = false;
 
 	// Remind with dialog window or system tray notification
 	public static final boolean DEFAULT_REMIND_WITH_DIALOG = false;

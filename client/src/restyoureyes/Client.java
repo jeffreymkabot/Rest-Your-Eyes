@@ -1,6 +1,11 @@
 package restyoureyes;
 
-import java.io.*;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.io.Reader;
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import com.google.gson.Gson;
@@ -28,21 +33,25 @@ public class Client {
 			Prefs prefs = gson.fromJson(reader, Prefs.class);
 			reader.close();
 			return prefs;
-		} catch(IOException e) {
-			e.printStackTrace();
+		} catch(IOException ex) {
+			ex.printStackTrace();
 			return Prefs.defaultPrefs();
 		}
 	}
 
-	// TODO split into individual methods setInterval setDarkTheme
+	// TODO split into individual methods setInterval setDarkTheme?
 	public static void setPrefs(Prefs prefs) throws IOException {
 		Gson gson = new Gson();
 		String json = gson.toJson(prefs);
 		HttpURLConnection conn = (HttpURLConnection) prefsURL().openConnection();
 		conn.setDoOutput(true);
-		conn.setRequestMethod("PATCH");
+		conn.setRequestMethod("POST");
 		OutputStream os = conn.getOutputStream();
 		os.write(json.getBytes());
+		os.close();
+		String response = "";
+//		InputStream in = conn.getInputStream();
+		System.out.println(conn.getResponseCode());
 	}
 
 	public static long getRemaining() {
