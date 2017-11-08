@@ -54,7 +54,6 @@ public class RestYourEyes extends Application {
 	// Configurable settings
 	private static Client client;
 	private static Prefs prefs;
-	private static boolean hideOnStartup = DEFAULT_STARTUP_HIDE;
 
 	private static double windowWidth = DEFAULT_WINDOW_WIDTH;
 	private static double windowHeight = DEFAULT_WINDOW_HEIGHT;
@@ -89,10 +88,10 @@ public class RestYourEyes extends Application {
 	private static java.awt.MenuItem toggleRemindersTrayItem;
 
 	// Variables
-	private static boolean runLoop = true,
-			disableReminders = false,
-			sysTraySupported = true;
-	private static Instant nextReminder;
+	// set runLoop to false to signal timerloop to terminate
+	private static volatile boolean runLoop = true;
+	private static boolean disableReminders = false;
+	private static boolean sysTraySupported = false;
 
 
 	/**
@@ -122,7 +121,30 @@ public class RestYourEyes extends Application {
 	 */
 	@Override
 	public void init() throws Exception {
-		client = new Client("8080");
+		client = new Client(8080);
+		client.setCloser((code, reason, remote) -> {
+			System.out.println("Close " + code + ":" + reason + ":" + remote);
+			Platform.exit();
+		});
+		client.setMessager((message) -> {
+			System.out.println("[" + new java.util.Date() + "] " + message);
+			if (prefs.isAggressiveReminders()) {
+				if (!reminder.isShowing()) {
+					Platform.runLater(() -> reminder.showAndWait());
+				}
+			}
+		});
+		prefs = client.getPrefs();
+	}
+
+	/**
+	 *
+	 * @throws Exception
+	 */
+	@Override
+	public void stop() throws Exception {
+		runLoop = false;
+		client.close();
 	}
 
 
@@ -140,51 +162,17 @@ public class RestYourEyes extends Application {
 	 */
 	@Override
 	public void start(Stage newStage) throws Exception {
-
 		try {
-			System.out.println("hello world " + client.getRemaining());
 			stage = newStage;
-			prefs = client.getPrefs();
 			initWindow();
-			initSystemTray();
+//			initSystemTray();
 			initEventHandlers();
-
 
 			Thread timerThread = new Thread(() -> timerLoop());
 			timerThread.start();
 
-			if (hideOnStartup && sysTraySupported) {
-				// Wait for tray icon to initialize (or fail, meaning system tray is not supported)
-				while (sysTraySupported && trayIcon == null) {
-					try {
-						Thread.sleep(5);
-					} catch (InterruptedException e) {
-						System.out.println("Sleep interrupted.");
-					}
-				}
-
-				if (sysTraySupported) {
-					Instant nowStart = Instant.now();
-					javax.swing.SwingUtilities.invokeLater(() -> {
-						if (!disableReminders) {
-							trayIcon.displayMessage(PROGRAM_TITLE, "Reminding every " + getDurationAsString(Duration
-									.between(nowStart, nowStart.plusMillis(prefs.getInterval())), false), java.awt
-									.TrayIcon.MessageType.INFO);
-						} else {
-							trayIcon.displayMessage(PROGRAM_TITLE, "Reminders disabled", java.awt.TrayIcon.MessageType
-									.INFO);
-						}
-					});
-				} else {
-					stage.show();
-				}
-			} else {
-				stage.show();
-			}
-
+			stage.show();
 			updateElements();
-
-
 		} catch (Exception ex) {
 			// Catch and print any exceptions to error log
 			StringWriter sw = new StringWriter();
@@ -198,7 +186,6 @@ public class RestYourEyes extends Application {
 			}
 			ex.printStackTrace();
 		}
-
 	}
 
 	/**
@@ -207,8 +194,8 @@ public class RestYourEyes extends Application {
 	private static void initWindow() {
 		System.out.println("Initializing main window...");
 
-		// Don't exit when all stages are closed
-		Platform.setImplicitExit(false);
+		// Exit when all stages are closed
+		Platform.setImplicitExit(true);
 
 		stage.setWidth(windowWidth);
 		stage.setHeight(windowHeight);
@@ -354,9 +341,7 @@ public class RestYourEyes extends Application {
 				// tray icon (removing the tray icon will also shut down AWT).
 				java.awt.MenuItem exitItem = new java.awt.MenuItem("Exit");
 				exitItem.addActionListener(event -> {
-					runLoop = false;
 					javafx.application.Platform.runLater(() -> {
-						runLoop = false;
 						if (reminder.isShowing()) {
 							((Stage) reminder.getDialogPane().getScene().getWindow()).close();
 							reminder.close();
@@ -441,6 +426,7 @@ public class RestYourEyes extends Application {
 		// "Disable reminders" button in reminder dialog window
 		disableRemindersBt.setOnAction(e -> {
 			if (!disableReminders) {
+				disableReminders = true;
 				toggleReminders();
 			}
 		});
@@ -524,6 +510,7 @@ public class RestYourEyes extends Application {
 				System.out.println("ERROR: Invalid interval specified.");
 			} catch (IOException ex) {
 				ex.printStackTrace();
+				Platform.exit();
 				// TODO IOException probably means parent process killed
 			}
 		});
@@ -539,13 +526,13 @@ public class RestYourEyes extends Application {
 				client.setPrefs(prefs);
 			} catch (IOException ex) {
 				ex.printStackTrace();
+				Platform.exit();
 				// TODO IOException probably means parent process killed
 			}
 		});
 
 		stage.setOnCloseRequest(e -> {
 			if (trayIcon == null) {
-				runLoop = false;
 				Platform.exit();
 			} else {
 				stage.hide();
@@ -555,7 +542,6 @@ public class RestYourEyes extends Application {
 		fileHide.setOnAction(e -> stage.hide());
 
 		fileExit.setOnAction(e -> {
-			runLoop = false;
 			Platform.exit();
 			if (trayIcon != null) {
 				java.awt.SystemTray.getSystemTray().remove(trayIcon);
@@ -581,23 +567,13 @@ public class RestYourEyes extends Application {
 
 		System.out.println("Starting timer...");
 
-		Instant now = Instant.now();
-		long remaining = 0;
-		try {
-			remaining = client.getRemaining();
-		} catch (Exception ex) {
-			ex.printStackTrace();
-			Platform.exit();
-		}
-		nextReminder = now.plusMillis(remaining);
+		long remaining;
 
 		updateElements();
 
 		while (runLoop) {
 			boolean paused = false;
-
-
-			while (runLoop && disableReminders) {
+			while (disableReminders) {
 				if (!paused) {
 					updateElements();
 					paused = true;
@@ -609,58 +585,15 @@ public class RestYourEyes extends Application {
 					System.out.println("Sleep interrupted.");
 				}
 			}
-			if (!runLoop) {
-				continue;
+
+			try {
+				remaining = client.getRemaining();
+			} catch (Exception ex) {
+				ex.printStackTrace();
+				Platform.exit();
+				return;
 			}
-			if (paused) {
-				now = Instant.now();
-				nextReminder = now.plusMillis(prefs.getInterval());
-			}
-
-
-			now = Instant.now();
-			Duration dur = Duration.between(now, nextReminder);
-			long hours = dur.toHours();
-			long minutes = dur.minusHours(hours).toMinutes();
-			long seconds = dur.minusMinutes(minutes).getSeconds();
-			long milliseconds = dur.minusMinutes(minutes).toMillis() - (seconds * 1000);
-
-			// TODO if-body on websocket message
-			if (false && milliseconds < 0 || seconds < 0 || minutes < 0 || hours < 0) {
-				System.out.println("[" + new java.util.Date() + "] Be sure to take a break from screen time to avoid " +
-						"eye strain!");
-				if (trayIcon != null) {
-					trayIcon.displayMessage(PROGRAM_TITLE + " Reminder", "Be sure to take a break from screen time to " +
-							"avoid eye strain!", java.awt.TrayIcon.MessageType.INFO);
-				}
-
-				if (prefs.isAggressiveReminders() || trayIcon == null || !sysTraySupported) {
-					if (!reminder.isShowing()) {
-						javafx.application.Platform.runLater(() -> {
-							reminder.showAndWait();
-						});
-					}
-
-					while (!reminder.isShowing()) {
-						try {
-							Thread.sleep(100);
-						} catch (InterruptedException e) {
-							System.out.println("Sleep interrupted.");
-						}
-					}
-
-					while (reminder.isShowing()) {
-						try {
-							Thread.sleep(100);
-						} catch (InterruptedException e) {
-							System.out.println("Sleep interrupted.");
-						}
-					}
-				}
-				now = Instant.now();
-				nextReminder = now.plusMillis(prefs.getInterval());
-				continue;
-			}
+			Duration dur = Duration.ofMillis(remaining);
 
 			javafx.application.Platform.runLater(() -> {
 				if (!disableReminders) {
@@ -739,10 +672,7 @@ public class RestYourEyes extends Application {
 	 * Updates GUI elements based on various program settings.
 	 */
 	private static void updateElements() {
-
-		Instant nowStart = Instant.now();
-		final String intervalString = "Reminding every " + getDurationAsString(Duration.between(nowStart, nowStart
-				.plusMillis(prefs.getInterval())), false);
+		final String intervalString = "Reminding every " + getDurationAsString(Duration.ofMillis(prefs.getInterval()), false);
 
 		// Set system tray elements
 		if (trayIcon != null) {

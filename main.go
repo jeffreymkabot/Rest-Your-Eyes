@@ -48,8 +48,8 @@ type prefs struct {
 	// protect reads on GET /prefs from concurrent writes on PATCH /prefs
 	mu                  sync.Mutex
 	Interval            int64
-	DarkTheme           int8
-	AggressiveReminders int8
+	DarkTheme           bool
+	AggressiveReminders bool
 }
 
 // will return default prefs on any error
@@ -95,9 +95,6 @@ func (p *prefs) isValid() error {
 	if p.Interval <= 0 {
 		return errors.New("interval must be positive")
 	}
-	if p.DarkTheme != 0 && p.DarkTheme != 1 {
-		return errors.New("dark theme must be 0 or 1")
-	}
 	return nil
 }
 
@@ -140,13 +137,16 @@ func cron(data *prefs, patch <-chan *prefs, remaining chan<- time.Time, toggle <
 				data.DarkTheme = tmp.DarkTheme
 				changed = true
 			}
+			if tmp.AggressiveReminders != data.AggressiveReminders {
+			    data.AggressiveReminders = tmp.AggressiveReminders
+			    changed = true
+			}
 			data.mu.Unlock()
 			if changed {
 				data.save()
 			}
 		case <-toggle:
 			active = !active
-			log.Printf("got toggle")
 		}
 	}
 }

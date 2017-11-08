@@ -1,6 +1,10 @@
 *.exe
 *.ini
 !**/Prefs.example.ini
+.idea
+*.jar
+*.iml
+*.log
 
 ##############################
 # Eclipse ignore entries
