@@ -13,7 +13,6 @@ import java.io.PrintWriter;
 import java.io.StringWriter;
 import java.nio.file.AccessDeniedException;
 import java.time.Duration;
-import java.time.Instant;
 import javax.imageio.IIOException;
 
 import javafx.application.Application;
@@ -70,6 +69,7 @@ public class RestYourEyes extends Application {
 	private static MenuItem fileExit;
 	private static Menu optionsMenu;
 	private static MenuItem toggleReminders;
+	private static MenuItem toggleAggressive;
 	private static MenuItem toggleTheme;
 	private static VBox nextReminderVBox;
 	private static Label nextReminderLbl;
@@ -81,8 +81,8 @@ public class RestYourEyes extends Application {
 	private static Button setIntervalBt;
 
 	private static Alert reminder;
-	private static HBox reminderBtPane;
-	private static Button disableRemindersBt;
+//	private static Button disableRemindersBt;
+//	private static HBox reminderBtPane;
 
 	private static java.awt.TrayIcon trayIcon;
 	private static java.awt.MenuItem toggleRemindersTrayItem;
@@ -90,38 +90,37 @@ public class RestYourEyes extends Application {
 	// Variables
 	// set runLoop to false to signal timerloop to terminate
 	private static volatile boolean runLoop = true;
-	private static boolean disableReminders = false;
+	// disable reminders to true to make timer display elements dormant
+	private static volatile boolean disableReminders = false;
 	private static boolean sysTraySupported = false;
+	private static int port;
 
 
 	/**
 	 * @param args The list of command line arguments passed to the program.
 	 */
 	public static void main(String[] args) {
-		try {
-			launch(args);
-		} catch (Exception ex) {
-			// Catch and print any exceptions to error log
-			StringWriter sw = new StringWriter();
-			PrintWriter pw = new PrintWriter(sw);
-			ex.printStackTrace(pw);
-			String stackTrace = sw.toString(); // stack trace as a string
+		if (args.length > 0) {
 			try {
-				writeTextFile("error.log", stackTrace, true);
-			} catch (IOException ex1) {
-				//Logger.getLogger(RestYourEyesUtil.class.getName()).log(Level.SEVERE, null, ex1);
+				port = Integer.parseInt(args[0]);
+			} catch (NumberFormatException nex) {
+				port = DEFAULT_SERVER_PORT;
 			}
-			ex.printStackTrace();
+		} else {
+			port = DEFAULT_SERVER_PORT;
 		}
+		launch(args);
 	}
 
 	/**
+	 * Connect a client to the host application before the gui is created.
 	 *
 	 * @throws Exception
 	 */
 	@Override
 	public void init() throws Exception {
-		client = new Client(8080);
+		client = new Client(port);
+		prefs = client.getPrefs();
 		client.setCloser((code, reason, remote) -> {
 			System.out.println("Close " + code + ":" + reason + ":" + remote);
 			Platform.exit();
@@ -134,10 +133,10 @@ public class RestYourEyes extends Application {
 				}
 			}
 		});
-		prefs = client.getPrefs();
 	}
 
 	/**
+	 * Gracefully disconnect the client before closing the application.
 	 *
 	 * @throws Exception
 	 */
@@ -212,20 +211,22 @@ public class RestYourEyes extends Application {
 		fileHide = new MenuItem("Hide");
 		fileExit = new MenuItem("Exit");
 		fileMenu.getItems().addAll(fileHide, fileExit);
+
 		optionsMenu = new Menu("Options");
-		toggleReminders = new MenuItem("");
-		if (!disableReminders) {
-			toggleReminders.setText("Disable reminders");
-		} else {
+		toggleAggressive = new MenuItem("Enable aggressive behavior");
+		if (prefs.isAggressiveReminders()) {
+			toggleAggressive.setText("Disable aggressive behavior");
+		}
+		toggleReminders = new MenuItem("Disable reminders");
+		if (disableReminders) {
 			toggleReminders.setText("Enable reminders");
 		}
-		toggleTheme = new MenuItem("");
+		toggleTheme = new MenuItem("Use dark color scheme");
 		if (prefs.isDarkTheme()) {
 			toggleTheme.setText("Use light color scheme");
-		} else {
-			toggleTheme.setText("Use dark color scheme");
 		}
-		optionsMenu.getItems().addAll(toggleReminders, toggleTheme);
+
+		optionsMenu.getItems().addAll(toggleAggressive, toggleReminders, toggleTheme);
 		fileToolbar.getMenus().addAll(fileMenu, optionsMenu);
 
 
@@ -279,6 +280,71 @@ public class RestYourEyes extends Application {
 		timeRemainingLbl.requestFocus();
 
 		primaryVBox.setPadding(new Insets(fileToolbar.getHeight(), 10.0, 10.0, 10.0));
+	}
+
+	/**
+	 * Initializes the reminder dialog window.
+	 */
+	private static void initReminderWindow() {
+		reminder = new Alert(Alert.AlertType.NONE, "Be sure to take a break from screen time to avoid eye strain!");
+		HBox reminderBtPane = new HBox();
+		Button disableRemindersBt = new Button("Disable reminders");
+
+		reminder.setResizable(false);
+		Stage remStage = (Stage) reminder.getDialogPane().getScene().getWindow();
+		remStage.getScene().getStylesheets().add(DEFAULT_STYLE_SHEET);
+		if (prefs.isDarkTheme()) {
+			remStage.getScene().getStylesheets().add(DARK_STYLE_SHEET);
+		}
+
+		try {
+			remStage.getIcons().add(new Image(ClassLoader.getSystemResourceAsStream(PROGRAM_ICON)));
+		} catch (Exception ex) {
+			System.out.println("ERROR: Unable to load reminder window icon");
+		}
+		remStage.setTitle("Rest your eyes!");
+		DialogPane dPane = reminder.getDialogPane();
+		dPane.setPrefWidth(350);
+		dPane.setPrefHeight(130);
+		dPane.setMaxHeight(131);
+		remStage.setMaxHeight(131);
+		dPane.setPadding(new Insets(0.0, 0.0, 0.0, 0.0));
+
+		VBox layoutVBox = new VBox();
+		layoutVBox.setAlignment(Pos.BOTTOM_CENTER);
+		dPane.setContent(layoutVBox);
+		Label msg = new Label("Be sure to take a break from screen time to avoid eye strain!");
+		msg.setStyle("-fx-font-size: 12px;");
+		msg.setTextAlignment(TextAlignment.CENTER);
+		Button okBt = new Button("Ok");
+		okBt.getStyleClass().add("reminder_button");
+		disableRemindersBt.getStyleClass().add("reminder_button");
+		reminderBtPane.getChildren().add(okBt);
+		reminderBtPane.setSpacing(5.0);
+		reminderBtPane.setAlignment(Pos.BOTTOM_RIGHT);
+		layoutVBox.getChildren().addAll(msg, reminderBtPane);
+
+		layoutVBox.setPrefWidth(dPane.getWidth());
+		layoutVBox.setPrefHeight(dPane.getHeight());
+
+		okBt.setOnAction(e -> {
+			remStage.close();
+			reminder.close();
+		});
+
+		// "Disable reminders" button in reminder dialog window
+//		disableRemindersBt.setOnAction(e -> {
+//			if (!disableReminders) {
+//				toggleReminders();
+//			}
+//		});
+
+		remStage.setOnCloseRequest(e -> {
+			//remStage.close();
+			//reminder.close();
+		});
+
+		remStage.setAlwaysOnTop(true);
 	}
 
 
@@ -373,74 +439,6 @@ public class RestYourEyes extends Application {
 
 
 	/**
-	 * Initializes the reminder dialog window.
-	 */
-	private static void initReminderWindow() {
-
-		reminder = new Alert(Alert.AlertType.NONE, "Be sure to take a break from screen time to avoid eye strain!");
-		HBox reminderBtPane = new HBox();
-		Button disableRemindersBt = new Button("Disable reminders");
-
-		reminder.setResizable(false);
-		Stage remStage = (Stage) reminder.getDialogPane().getScene().getWindow();
-		remStage.getScene().getStylesheets().add(DEFAULT_STYLE_SHEET);
-		if (prefs.isDarkTheme()) {
-			remStage.getScene().getStylesheets().add(DARK_STYLE_SHEET);
-		}
-
-		try {
-			remStage.getIcons().add(new Image(ClassLoader.getSystemResourceAsStream(PROGRAM_ICON)));
-		} catch (Exception ex) {
-			System.out.println("ERROR: Unable to load reminder window icon");
-		}
-		remStage.setTitle("Rest your eyes!");
-		DialogPane dPane = reminder.getDialogPane();
-		dPane.setPrefWidth(350);
-		dPane.setPrefHeight(130);
-		dPane.setMaxHeight(131);
-		remStage.setMaxHeight(131);
-		dPane.setPadding(new Insets(0.0, 0.0, 0.0, 0.0));
-
-		VBox layoutVBox = new VBox();
-		layoutVBox.setAlignment(Pos.BOTTOM_CENTER);
-		dPane.setContent(layoutVBox);
-		Label msg = new Label("Be sure to take a break from screen time to avoid eye strain!");
-		msg.setStyle("-fx-font-size: 12px;");
-		msg.setTextAlignment(TextAlignment.CENTER);
-		Button okBt = new Button("Ok");
-		okBt.getStyleClass().add("reminder_button");
-		disableRemindersBt.getStyleClass().add("reminder_button");
-		reminderBtPane.getChildren().add(okBt);
-		reminderBtPane.setSpacing(5.0);
-		reminderBtPane.setAlignment(Pos.BOTTOM_RIGHT);
-		layoutVBox.getChildren().addAll(msg, reminderBtPane);
-
-		layoutVBox.setPrefWidth(dPane.getWidth());
-		layoutVBox.setPrefHeight(dPane.getHeight());
-
-		okBt.setOnAction(e -> {
-			remStage.close();
-			reminder.close();
-		});
-
-		// "Disable reminders" button in reminder dialog window
-		disableRemindersBt.setOnAction(e -> {
-			if (!disableReminders) {
-				disableReminders = true;
-				toggleReminders();
-			}
-		});
-
-		remStage.setOnCloseRequest(e -> {
-			//remStage.close();
-			//reminder.close();
-		});
-
-		remStage.setAlwaysOnTop(true);
-	}
-
-
-	/**
 	 * Initializes the handler functions that respond to user interaction with the GUI.
 	 */
 	private static void initEventHandlers() {
@@ -473,12 +471,9 @@ public class RestYourEyes extends Application {
 		});
 
 
-		newIntervalField.textProperty().addListener((ObservableValue<? extends String> observableValue, String
-				oldText, String newText) -> {
-			checkInput();
-		});
-
-
+		newIntervalField.textProperty().addListener(
+				(ObservableValue<? extends String> observableValue, String oldText, String newText) -> checkInput()
+		);
 		unitPicker.setOnAction(e -> checkInput());
 
 
@@ -511,11 +506,11 @@ public class RestYourEyes extends Application {
 			} catch (IOException ex) {
 				ex.printStackTrace();
 				Platform.exit();
-				// TODO IOException probably means parent process killed
 			}
 		});
 
 
+		toggleAggressive.setOnAction(e -> toggleAggressive());
 		toggleReminders.setOnAction(e -> toggleReminders());
 
 
@@ -527,25 +522,16 @@ public class RestYourEyes extends Application {
 			} catch (IOException ex) {
 				ex.printStackTrace();
 				Platform.exit();
-				// TODO IOException probably means parent process killed
 			}
 		});
 
-		stage.setOnCloseRequest(e -> {
-			if (trayIcon == null) {
-				Platform.exit();
-			} else {
-				stage.hide();
-			}
-		});
+		stage.setOnCloseRequest(e -> Platform.exit());
 
-		fileHide.setOnAction(e -> stage.hide());
+		fileHide.setOnAction(e -> Platform.exit());
 
 		fileExit.setOnAction(e -> {
+			// TODO close signal to host application
 			Platform.exit();
-			if (trayIcon != null) {
-				java.awt.SystemTray.getSystemTray().remove(trayIcon);
-			}
 		});
 	}
 
@@ -572,13 +558,8 @@ public class RestYourEyes extends Application {
 		updateElements();
 
 		while (runLoop) {
-			boolean paused = false;
 			while (disableReminders) {
-				if (!paused) {
-					updateElements();
-					paused = true;
-				}
-
+				updateElements();
 				try {
 					Thread.sleep(100);
 				} catch (InterruptedException e) {
@@ -593,11 +574,13 @@ public class RestYourEyes extends Application {
 				Platform.exit();
 				return;
 			}
-			Duration dur = Duration.ofMillis(remaining);
 
+			// compiler wants us to pass a constant into lambda expr, otherwise
+			// error: local variables referenced from a lambda expression must be final or effectively final
+			final long remainingSnapshot = remaining;
 			javafx.application.Platform.runLater(() -> {
 				if (!disableReminders) {
-					timeRemainingLbl.setText(getDurationAsString(dur, true));
+					timeRemainingLbl.setText(getDurationAsString(Duration.ofMillis(remainingSnapshot), true));
 				}
 			});
 
@@ -672,8 +655,8 @@ public class RestYourEyes extends Application {
 	 * Updates GUI elements based on various program settings.
 	 */
 	private static void updateElements() {
-		final String intervalString = "Reminding every " + getDurationAsString(Duration.ofMillis(prefs.getInterval()), false);
-
+		final String intervalString = "Reminding every " + getDurationAsString(Duration.ofMillis(prefs.getInterval()),
+				false);
 		// Set system tray elements
 		if (trayIcon != null) {
 			javax.swing.SwingUtilities.invokeLater(() -> {
@@ -689,19 +672,19 @@ public class RestYourEyes extends Application {
 
 		// Update JavaFX elements
 		javafx.application.Platform.runLater(() -> {
-			if (reminderBtPane != null) {
-				if (reminderBtPane.getChildren().size() > 1) {
-					reminderBtPane.getChildren().get(1).requestFocus();
-				} else if (reminderBtPane.getChildren().size() > 0) {
-					reminderBtPane.getChildren().get(0).requestFocus();
-				}
-			}
+//			if (reminderBtPane != null) {
+//				if (reminderBtPane.getChildren().size() > 1) {
+//					reminderBtPane.getChildren().get(1).requestFocus();
+//				} else if (reminderBtPane.getChildren().size() > 0) {
+//					reminderBtPane.getChildren().get(0).requestFocus();
+//				}
+//			}
 
-			if (trayIcon == null && fileMenu.getItems().contains(fileHide)) {
-				fileMenu.getItems().remove(fileHide);
-			} else if (trayIcon != null && sysTraySupported && !fileMenu.getItems().contains(fileHide)) {
-				fileMenu.getItems().add(0, fileHide);
-			}
+//			if (trayIcon == null && fileMenu.getItems().contains(fileHide)) {
+//				fileMenu.getItems().remove(fileHide);
+//			} else if (trayIcon != null && sysTraySupported && !fileMenu.getItems().contains(fileHide)) {
+//				fileMenu.getItems().add(0, fileHide);
+//			}
 
 
 			if (prefs.isDarkTheme()) {
@@ -734,19 +717,17 @@ public class RestYourEyes extends Application {
 				}
 			}
 
-			if (!disableReminders) {
-				nextReminderLbl.setText("Next reminder:");
-				toggleReminders.setText("Disable reminders");
-				timeRemainingLblTooltip.setText(intervalString);
-				if (reminderBtPane != null && disableRemindersBt != null) {
-					if (!reminderBtPane.getChildren().contains(disableRemindersBt)) {
-						reminderBtPane.getChildren().add(0, disableRemindersBt);
-					}
-				}
+			if (prefs.isAggressiveReminders()) {
+				toggleAggressive.setText("Disable aggressive behavior");
 			} else {
+				toggleAggressive.setText("Enable aggressive behavior");
+			}
+
+			if (disableReminders) {
 				nextReminderLbl.setText("Reminders disabled.");
 				toggleReminders.setText("Enable reminders");
-				timeRemainingLblTooltip.setText("Reminders are currently disabled.\nYou can enable reminders from the " +
+				timeRemainingLblTooltip.setText("Reminders are currently disabled.\nYou can enable reminders from the" +
+						" " +
 						"Options menu.");
 				timeRemainingLbl.setText("--:--:--.---");
 
@@ -754,11 +735,20 @@ public class RestYourEyes extends Application {
 					((Stage) reminder.getDialogPane().getScene().getWindow()).close();
 					reminder.close();
 				}
-				if (reminderBtPane != null && disableRemindersBt != null) {
-					if (reminderBtPane.getChildren().contains(disableRemindersBt)) {
-						reminderBtPane.getChildren().remove(disableRemindersBt);
-					}
-				}
+//				if (reminderBtPane != null && disableRemindersBt != null) {
+//					if (reminderBtPane.getChildren().contains(disableRemindersBt)) {
+//						reminderBtPane.getChildren().remove(disableRemindersBt);
+//					}
+//				}
+			} else {
+				nextReminderLbl.setText("Next reminder:");
+				toggleReminders.setText("Disable reminders");
+				timeRemainingLblTooltip.setText(intervalString);
+//				if (reminderBtPane != null && disableRemindersBt != null) {
+//					if (!reminderBtPane.getChildren().contains(disableRemindersBt)) {
+//						reminderBtPane.getChildren().add(0, disableRemindersBt);
+//					}
+//				}
 			}
 
 			checkInput();
@@ -766,13 +756,28 @@ public class RestYourEyes extends Application {
 	}
 
 	/**
-	 * Toggles reminder notifications and updates the GUI elements.
+	 * Toggles whether the gui opens a popup window for a reminder.
+	 */
+	private static void toggleAggressive() {
+		prefs.setAggressiveReminders(!prefs.isAggressiveReminders());
+		try {
+			client.setPrefs(prefs);
+		} catch (IOException iex) {
+			iex.printStackTrace();
+			Platform.exit();
+		}
+		updateElements();
+	}
+
+	/**
+	 * Toggles whether reminders happen at all.  Does not pause or reset the actual timer.
 	 */
 	private static void toggleReminders() {
+		disableReminders = !disableReminders;
 		try {
 			client.toggleReminders();
-		} catch (IOException ex) {
-			ex.printStackTrace();
+		} catch (IOException iex) {
+			iex.printStackTrace();
 			Platform.exit();
 		}
 		updateElements();

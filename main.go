@@ -33,10 +33,12 @@ type clients struct {
 }
 
 func (c *clients) notify(message string) {
+	log.Printf("notifying %v clients", len(c.list))
 	for i, conn := range c.list {
-		log.Printf("writing to %s", conn.RemoteAddr())
+		log.Printf("writing to %v %s", i, conn.RemoteAddr())
 		if err := conn.WriteMessage(websocket.TextMessage, []byte(message)); err != nil {
-			log.Printf("err writing to %s: %v", conn.RemoteAddr(), err)
+			log.Printf("err writing to %v %s: %v", i, conn.RemoteAddr(), err)
+			// TODO fix panic on slice index out of bounds
 			c.list = append(c.list[:i], c.list[i+1:]...)
 		}
 	}

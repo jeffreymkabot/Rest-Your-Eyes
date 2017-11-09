@@ -22,6 +22,8 @@ public class Constants {
 	// Start minimized to system tray
 	public static final boolean DEFAULT_STARTUP_HIDE = false;
 
+	public static final int DEFAULT_SERVER_PORT = 0451;
+
 
 	// Window width and height
 	public static final double DEFAULT_WINDOW_WIDTH = 400.0;
